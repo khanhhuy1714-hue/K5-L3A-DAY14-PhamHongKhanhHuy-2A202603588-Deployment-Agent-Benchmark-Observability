@@ -11,6 +11,7 @@ Trong production: lưu trong Redis/DB, không phải in-memory.
 import time
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -126,3 +127,40 @@ class CostGuard:
 
 # Singleton
 cost_guard = CostGuard(daily_budget_usd=1.0, global_daily_budget_usd=10.0)
+
+
+def check_budget(
+    user_id: str,
+    estimated_cost: float,
+    redis_client=None,
+    monthly_budget_usd: float = 10.0,
+) -> bool:
+    """
+    Exercise 4.4 — Redis-backed monthly cost guard.
+    Return True nếu còn budget, False nếu vượt.
+
+    Logic:
+    - Mỗi user có budget mặc định $10/tháng
+    - Track spending trong Redis theo key budget:{user_id}:{YYYY-MM}
+    - Tự reset sang tháng mới theo key tháng + TTL 32 ngày
+    """
+    if estimated_cost < 0:
+        raise ValueError("estimated_cost must be non-negative")
+
+    if redis_client is None:
+        import os
+        import redis
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        redis_client = redis.from_url(redis_url, decode_responses=True)
+
+    month_key = datetime.now(timezone.utc).strftime("%Y-%m")
+    key = f"budget:{user_id}:{month_key}"
+
+    current = float(redis_client.get(key) or 0.0)
+    if current + estimated_cost > monthly_budget_usd:
+        return False
+
+    redis_client.incrbyfloat(key, estimated_cost)
+    redis_client.expire(key, 32 * 24 * 3600)  # 32 days
+    return True

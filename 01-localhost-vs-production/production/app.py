@@ -9,27 +9,38 @@ So sánh với basic/app.py để thấy sự khác biệt:
   ✅ 0.0.0.0 binding (chạy được trong container)
   ✅ Port từ PORT env var (Railway/Render inject tự động)
 """
-import os
-import signal
-import logging
+import asyncio
 import json
+import logging
 import time
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from config import settings
 from utils.mock_llm import ask
 
-# ✅ Structured JSON logging — dễ parse trong log aggregator (Datadog, Loki...)
-logging.basicConfig(
-    level=logging.DEBUG if settings.debug else logging.INFO,
-    format='{"time":"%(asctime)s","level":"%(levelname)s","msg":"%(message)s"}',
-)
-logger = logging.getLogger(__name__)
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        return json.dumps({
+            "time": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+            "level": record.levelname,
+            "event": record.getMessage(),
+            **getattr(record, "fields", {}),
+        }, ensure_ascii=False)
+
+
+logger = logging.getLogger("day14.localhost_agent")
+logger.setLevel(logging.DEBUG if settings.debug else logging.INFO)
+logger.propagate = False
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    logger.addHandler(handler)
 
 # Track startup time cho /health
 START_TIME = time.time()
@@ -46,25 +57,24 @@ async def lifespan(app: FastAPI):
     global is_ready
 
     # --- Startup ---
-    logger.info(json.dumps({
-        "event": "startup",
+    logger.info("startup", extra={"fields": {
         "app": settings.app_name,
         "version": settings.app_version,
         "env": settings.environment,
         "port": settings.port,
-    }))
+        "llm_backend": "mock",
+    }})
     # Simulate loading model/connecting DB
-    time.sleep(0.1)
+    await asyncio.sleep(0.1)
     is_ready = True
-    logger.info("Agent is ready to serve requests")
+    logger.info("ready")
 
-    yield  # App running
-
-    # --- Shutdown ---
-    is_ready = False
-    logger.info("Agent shutting down gracefully — finishing in-flight requests...")
-    time.sleep(0.1)  # Cho request hiện tại hoàn thành
-    logger.info("Shutdown complete")
+    try:
+        yield
+    finally:
+        # Uvicorn drains in-flight requests before lifespan shutdown.
+        is_ready = False
+        logger.info("shutdown_complete")
 
 
 app = FastAPI(
@@ -108,18 +118,15 @@ async def ask_agent(request: Request):
         raise HTTPException(status_code=422, detail="question field is required")
 
     # ✅ Structured logging — KHÔNG log secrets
-    logger.info(json.dumps({
-        "event": "agent_request",
+    logger.info("agent_request", extra={"fields": {
         "question_length": len(question),
-        "client_ip": request.client.host,
-    }))
+    }})
 
-    response = ask(question)
+    response = await run_in_threadpool(ask, question)
 
-    logger.info(json.dumps({
-        "event": "agent_response",
+    logger.info("agent_response", extra={"fields": {
         "response_length": len(response),
-    }))
+    }})
 
     return {
         "question": question,
@@ -154,7 +161,7 @@ def readiness_check():
     """
     ✅ Readiness probe: "Agent có sẵn sàng nhận request chưa?"
     Load balancer dùng cái này để quyết định có route traffic vào không.
-    Trả về 503 khi đang khởi động hoặc quá tải.
+    Trả về 503 khi cờ readiness của lifecycle chưa bật.
     """
     if not is_ready:
         raise HTTPException(status_code=503, detail="Agent not ready yet")
@@ -173,24 +180,7 @@ def metrics():
     }
 
 
-# ============================================================
-# GRACEFUL SHUTDOWN
-# ============================================================
-
-def handle_sigterm(*args):
-    """
-    ✅ Xử lý SIGTERM — signal mà platform gửi khi muốn tắt container.
-    Cho phép request hiện tại hoàn thành trước khi tắt.
-    """
-    logger.info("Received SIGTERM — initiating graceful shutdown")
-    # uvicorn sẽ tự handle, nhưng bạn có thể thêm cleanup logic ở đây
-
-
-signal.signal(signal.SIGTERM, handle_sigterm)
-
-
 if __name__ == "__main__":
-    logger.info(f"Starting {settings.app_name} on {settings.host}:{settings.port}")
     uvicorn.run(
         "app:app" if settings.debug else app,
         host=settings.host,   # ✅ 0.0.0.0 — nhận kết nối từ bên ngoài container

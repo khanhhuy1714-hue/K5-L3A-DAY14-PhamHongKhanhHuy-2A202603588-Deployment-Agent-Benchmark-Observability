@@ -125,12 +125,11 @@ docker images | grep myapp
 
 ```
 production/
-├── app.py
+├── main.py
 ├── Dockerfile              # Multi-stage build → image nhỏ hơn nhiều
 ├── docker-compose.yml      # Full stack: agent + vector store + redis
 ├── nginx/
 │   └── nginx.conf          # Reverse proxy
-├── .dockerignore
 └── requirements.txt
 ```
 
@@ -156,9 +155,9 @@ docker compose -f 02-docker/production/docker-compose.yml down
 
 ```bash
 # Basic vs Advanced
-docker images | grep agent
-# agent-basic    ~  800 MB  ← python:3.11 base
-# agent-advanced ~  160 MB  ← python:3.11-slim + multi-stage
+docker build -f 02-docker/develop/Dockerfile -t my-agent:develop .
+docker build -f 02-docker/production/Dockerfile -t my-agent:advanced .
+docker image ls my-agent
 ```
 
 ---
@@ -175,7 +174,7 @@ FROM python:3.11-slim          # 150 MB ← bắt đầu từ image sạch
 COPY --from=builder ...        # copy chỉ /site-packages
 ```
 
-**Kết quả:** Final image chỉ có runtime, không có pip, không có build tools → nhỏ và an toàn hơn.
+**Kết quả:** Final image dùng base slim và nhận venv từ stage builder. Các layer cài compiler và build headers của builder nằm ngoài final image.
 
 ---
 

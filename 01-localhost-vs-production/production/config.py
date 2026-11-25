@@ -7,8 +7,14 @@ Tất cả config đọc từ environment variables.
 - Validation rõ ràng — fail fast nếu thiếu config quan trọng
 """
 import os
-import logging
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+# Local defaults only. Platform or shell values take precedence.
+load_dotenv(Path(__file__).with_name(".env"), override=False)
 
 
 @dataclass
@@ -23,7 +29,7 @@ class Settings:
     app_version: str = field(default_factory=lambda: os.getenv("APP_VERSION", "1.0.0"))
     environment: str = field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
 
-    # LLM (optional — chỉ warn nếu thiếu, không crash)
+    # LLM (optional — mock không cần key)
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", "gpt-4o-mini"))
     max_tokens: int = field(default_factory=lambda: int(os.getenv("MAX_TOKENS", "500")))
@@ -36,13 +42,8 @@ class Settings:
 
     def validate(self):
         """Fail fast nếu thiếu config bắt buộc."""
-        warnings = []
-        if not self.openai_api_key:
-            warnings.append("OPENAI_API_KEY not set — using mock LLM")
         if not self.api_key and self.environment == "production":
             raise ValueError("AGENT_API_KEY must be set in production!")
-        for w in warnings:
-            logging.warning(w)
         return self
 
 

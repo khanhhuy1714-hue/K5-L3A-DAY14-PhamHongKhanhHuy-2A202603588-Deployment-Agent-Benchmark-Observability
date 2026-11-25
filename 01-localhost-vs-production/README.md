@@ -27,7 +27,7 @@ python app.py
 1. API key hardcode trong code
 2. Không có health check endpoint
 3. Debug mode bật cứng
-4. Không xử lý SIGTERM gracefully
+4. Không có lifecycle riêng của app để dọn tài nguyên khi shutdown
 5. Config không đến từ environment
 
 ---
@@ -59,7 +59,7 @@ python app.py
 | Secrets | `api_key = "sk-abc123"` | `os.getenv("OPENAI_API_KEY")` |
 | Port | Cố định `8000` | Từ `PORT` env var |
 | Health check | Không có | `GET /health` |
-| Shutdown | Tắt đột ngột | Graceful — hoàn thành request hiện tại |
+| Shutdown | Lifecycle mặc định của Uvicorn | Uvicorn drain request, FastAPI lifespan chạy cleanup |
 | Logging | `print()` | Structured JSON logging |
 
 ---

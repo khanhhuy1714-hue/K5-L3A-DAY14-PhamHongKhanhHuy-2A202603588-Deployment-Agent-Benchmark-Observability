@@ -89,9 +89,7 @@ python app.py
 
 Test:
 ```bash
-curl http://localhost:8000/ask -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"question": "Hello"}'
+curl -X POST 'http://localhost:8000/ask?question=Hello'
 ```
 
 **Quan sát:** Nó chạy! Nhưng có production-ready không?
@@ -112,7 +110,7 @@ python app.py
 | Config | Hardcode | Env vars | ... |
 | Health check |  |  | ... |
 | Logging | print() | JSON | ... |
-| Shutdown | Đột ngột | Graceful | ... |
+| Shutdown | Lifecycle mặc định của Uvicorn | Uvicorn drain request + FastAPI lifespan | ... |
 
 ###  Checkpoint 1
 
@@ -153,16 +151,14 @@ cd ../../02-docker/develop
 ###  Exercise 2.2: Build và run
 
 ```bash
-# Build image
+# Từ repo root, build image
 docker build -f 02-docker/develop/Dockerfile -t my-agent:develop .
 
 # Run container
 docker run -p 8000:8000 my-agent:develop
 
 # Test
-curl http://localhost:8000/ask -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What is Docker?"}'
+curl -X POST 'http://localhost:8000/ask?question=What%20is%20Docker%3F'
 ```
 
 **Quan sát:** Image size là bao nhiêu?
@@ -172,10 +168,6 @@ docker images my-agent:develop
 
 ###  Exercise 2.3: Multi-stage build
 
-```bash
-cd ../production
-```
-
 **Nhiệm vụ:** Đọc `Dockerfile` và tìm:
 - Stage 1 làm gì?
 - Stage 2 làm gì?
@@ -183,8 +175,9 @@ cd ../production
 
 Build và so sánh:
 ```bash
-docker build -t my-agent:advanced .
-docker images | grep my-agent
+# Từ repo root
+docker build -f 02-docker/production/Dockerfile -t my-agent:advanced .
+docker image ls my-agent
 ```
 
 ###  Exercise 2.4: Docker Compose stack
@@ -192,7 +185,8 @@ docker images | grep my-agent
 **Nhiệm vụ:** Đọc `docker-compose.yml` và vẽ architecture diagram.
 
 ```bash
-docker compose up
+# Từ repo root
+docker compose -f 02-docker/production/docker-compose.yml up --build -d
 ```
 
 Services nào được start? Chúng communicate thế nào?
@@ -210,10 +204,10 @@ curl http://localhost/ask -X POST \
 
 ###  Checkpoint 2
 
-- [ ] Hiểu cấu trúc Dockerfile
-- [ ] Biết lợi ích của multi-stage builds
-- [ ] Hiểu Docker Compose orchestration
-- [ ] Biết cách debug container (`docker logs`, `docker exec`)
+- [x] Hiểu cấu trúc Dockerfile
+- [x] Biết lợi ích của multi-stage builds
+- [x] Hiểu Docker Compose orchestration
+- [x] Biết cách debug container (`docker logs`, `docker exec`)
 
 ---
 
@@ -315,10 +309,10 @@ cd ../production-cloud-run
 
 ###  Checkpoint 3
 
-- [ ] Deploy thành công lên ít nhất 1 platform
-- [ ] Có public URL hoạt động
-- [ ] Hiểu cách set environment variables trên cloud
-- [ ] Biết cách xem logs
+- [x] Deploy thành công lên ít nhất 1 platform
+- [x] Có public URL hoạt động
+- [x] Hiểu cách set environment variables trên cloud
+- [x] Biết cách xem logs
 
 ---
 
@@ -451,10 +445,10 @@ def check_budget(user_id: str, estimated_cost: float) -> bool:
 
 ###  Checkpoint 4
 
-- [ ] Implement API key authentication
-- [ ] Hiểu JWT flow
-- [ ] Implement rate limiting
-- [ ] Implement cost guard với Redis
+- [x] Implement API key authentication
+- [x] Hiểu JWT flow
+- [x] Implement rate limiting
+- [x] Implement cost guard với Redis
 
 ---
 
@@ -623,11 +617,11 @@ Script này:
 
 ###  Checkpoint 5
 
-- [ ] Implement health và readiness checks
-- [ ] Implement graceful shutdown
-- [ ] Refactor code thành stateless
-- [ ] Hiểu load balancing với Nginx
-- [ ] Test stateless design
+- [x] Implement health và readiness checks
+- [x] Implement graceful shutdown
+- [x] Refactor code thành stateless
+- [x] Hiểu load balancing với Nginx
+- [x] Test stateless design
 
 ---
 
@@ -640,18 +634,18 @@ Tự xây một production-ready AI agent từ **bản khung** trong `06-lab-com
 ###  Requirements
 
 **Bắt buộc — 12 tiêu chí được script chấm tự động:**
-- [ ] Dockerfile (multi-stage, < 500 MB)
-- [ ] docker-compose.yml (agent + redis)
-- [ ] .dockerignore
-- [ ] Health check endpoint (`GET /health`)
-- [ ] Readiness endpoint (`GET /ready`)
-- [ ] API Key authentication
-- [ ] Rate limiting
-- [ ] Cost guard
-- [ ] Config từ environment variables
-- [ ] Structured logging
-- [ ] Graceful shutdown
-- [ ] Public URL ready (Railway / Render config)
+- [x] Dockerfile (multi-stage, < 500 MB)
+- [x] docker-compose.yml (agent + redis)
+- [x] .dockerignore
+- [x] Health check endpoint (`GET /health`)
+- [x] Readiness endpoint (`GET /ready`)
+- [x] API Key authentication
+- [x] Rate limiting
+- [x] Cost guard
+- [x] Config từ environment variables
+- [x] Structured logging
+- [x] Graceful shutdown
+- [x] Public URL ready (Railway / Render config)
 
 Quy ước chi tiết mà script chấm dựa vào (endpoint, header, mã lỗi, biến môi trường...) nằm ở mục **Hợp đồng** trong [06-lab-complete/README.md](06-lab-complete/README.md).
 
@@ -1065,13 +1059,13 @@ docker compose down   # dọn dẹp khi xong
 
 ###  Checkpoint 7
 
-- [ ] Giải thích được p50/p95/p99 và vì sao SLO đặt theo percentile
-- [ ] Chạy load test và đánh giá kết quả so với SLO
-- [ ] Chạy eval, so sánh 2 phiên bản, hiểu quality gate
-- [ ] Đọc dashboard Grafana theo 4 Golden Signals
-- [ ] Tìm được span gây chậm trong Jaeger
-- [ ] Làm ít nhất 2 alert firing và giải thích nguyên nhân
-- [ ] Hoàn thành `BENCHMARK_REPORT.md`
+- [x] Giải thích được p50/p95/p99 và vì sao SLO đặt theo percentile
+- [x] Chạy load test và đánh giá kết quả so với SLO
+- [x] Chạy eval, so sánh 2 phiên bản, hiểu quality gate
+- [x] Đọc dashboard Grafana theo 4 Golden Signals
+- [x] Tìm được span gây chậm trong Jaeger
+- [x] Làm ít nhất 2 alert firing và giải thích nguyên nhân
+- [x] Hoàn thành `BENCHMARK_REPORT.md`
 
 ---
 

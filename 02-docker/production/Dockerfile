@@ -24,9 +24,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy và cài requirements
-# Dùng --user để install vào /root/.local (dễ copy sang stage 2)
+# Cài vào venv ở đường dẫn cố định để chuyển nguyên venv sang runtime.
 COPY 02-docker/production/requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 
 # ──────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 WORKDIR /app
 
 # Copy installed packages từ builder
-COPY --from=builder /root/.local /home/appuser/.local
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy source code
 COPY 02-docker/production/main.py .
@@ -57,14 +58,14 @@ RUN chown -R appuser:appuser /app
 # Chuyển sang non-root user
 USER appuser
 
-# PATH để Python tìm được packages của --user install
-ENV PATH=/home/appuser/.local/bin:$PATH
+# Dùng Python và Uvicorn của venv khi chạy bằng user non-root.
+ENV PATH="/opt/venv/bin:${PATH}"
 ENV PYTHONPATH=/app
 
 # Expose port
 EXPOSE 8000
 
-# Health check — Docker sẽ tự restart nếu fail
+# Health check — cập nhật trạng thái health của container.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
